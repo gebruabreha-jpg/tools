@@ -1,0 +1,113 @@
+ChatGPT said:
+
+confd is a tool used to manage and deploy configuration files in a consistent and automated way, particularly for systems that require dynamic configuration updates. It's especially useful in environments where configuration data is stored in external sources like etcd, Consul, or other key-value stores.
+
+Here are some key points about confd:
+
+Configuration Management: confd templates configuration files from a source of truth (like etcd, Consul, or others) into the format that your application needs.
+
+Dynamic Configuration: It can dynamically pull configuration values from a key-value store, allowing you to change configurations in real-time without needing to restart services or manually update configuration files.
+
+Template System: It uses Go templates to generate configuration files. These templates can be filled with data from the key-value store.
+
+Polling or Event-Driven: confd can either poll the data store at regular intervals or respond to changes in the key-value store (using an event-driven approach).
+
+
+1) Clone this repo in your workspace: pc/user-plane-cm-publisher · Gerrit Code Review
+2) inside the repo, copy the following Makefile:
+ 
+
+
+# Makefile
+usage:
+	@echo "make all      Build yang files"
+	@echo "make clean    Remove all built and intermediary files"
+	@echo "make start    Start ConfD daemon"
+	@echo "make stop     Stop any ConfD daemon"
+	@echo "make cli      Start the ConfD Command Line Interface"
+	@echo "make lint	 Start pyang linter on all the yang files"
+	@echo "make test	 Start a server and run model cli tests"
+	@echo "make install  Install ConfD in the provided CONFD_DIR"
+# Include standard ConfD build definitions and rules
+include $(CONFD_DIR)/src/confd/build/include.mk
+$(CONFD_DIR)/src/confd/build/include.mk:
+	@echo 'Where is ConfD installed? Set $$CONFD_DIR to point it out!'
+	@echo ''
+CONFD_INSTALL_INTERMEDIATE ?= ./install-condfd/
+BUILD_DIR ?= 		./build-condfd/
+SOURCE_YANG_DIR ?= 	./yang/
+# List Ericsson yangs and generate FXSS file names.
+YANGS = $(wildcard $(SOURCE_YANG_DIR)ericsson*.yang)
+FXSS = $(YANGS:$(SOURCE_YANG_DIR)%.yang=$(BUILD_DIR)%.fxs)
+# List IETF and TAILF modules, remove those that are submodules and generate FXSS file names.
+IETF_YANG_SOURCES  = $(wildcard $(SOURCE_YANG_DIR)ietf-*.yang)
+IANA_YANG_SOURCES  = $(wildcard $(SOURCE_YANG_DIR)iana-*.yang)
+TAILF_YANG_SOURCES = $(wildcard $(SOURCE_YANG_DIR)tailf-*.yang)
+SUBMODULES         = $(shell grep -l belongs-to $(SOURCE_YANG_DIR)*.yang)
+EXTERNAL_YANGS = $(filter-out $(SUBMODULES), $(IETF_YANG_SOURCES) $(TAILF_YANG_SOURCES) $(IANA_YANG_SOURCES))
+EXTERNAL_FXSS = $(EXTERNAL_YANGS:$(SOURCE_YANG_DIR)%.yang=$(BUILD_DIR)%.fxs)
+# User defined flags to be appendend to commands
+CONFD_EXTRA_FLAGS ?=
+CONFDC_EXTRA_FLAGS ?=
+CONFD_FLAGS ?= --addloadpath $(BUILD_DIR) --foreground --verbose --stop-on-eof $(CONFD_EXTRA_FLAGS)
+
+.PHONY: clean all start stop cli usage lint test
+# BUILD targets
+all: $(BUILD_DIR) $(EXTERNAL_FXSS) $(FXSS)
+	@echo "Build complete"
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
+$(BUILD_DIR)%.fxs: $(SOURCE_YANG_DIR)%.yang
+	$(CONFDC) --use-description always --yangpath $(SOURCE_YANG_DIR) -c -o $@ $(CONFDC_EXTRA_FLAGS) $<
+clean:	iclean
+	rm -rf $(BUILD_DIR)
+lint:
+	pyang --lint --canonical --max-line-length=120 -p $(SOURCE_YANG_DIR) $(YANGS)
+test: all
+	# Start server no foreground
+	CONFD_FLAGS="$(filter-out --foreground, $(CONFD_FLAGS))" $(MAKE) start
+	# Give server time to start
+	sleep 5
+	# run tests
+	MAKE=$(MAKE) sh -c ./test/cli_script.sh
+# Run targets
+start:
+	$(CONFD) $(CONFD_FLAGS)
+stop:
+	$(CONFD) --stop
+cli:
+	$(CONFD_DIR)/bin/confd_cli --interactive
+install:
+	mkdir -p $(CONFD_INSTALL_INTERMEDIATE)
+	mkdir -p $(CONFD_DIR)
+	chmod -R 777 $(CONFD_DIR)
+	unzip /lab/epg_design_utils/eoutbor/confd/confd-basic-7.3.linux.x86_64.zip -d $(CONFD_INSTALL_INTERMEDIATE)
+	$(CONFD_INSTALL_INTERMEDIATE)/confd-basic-7.3.linux.x86_64/confd-basic-7.3.linux.x86_64.installer.bin $(CONFD_DIR)
+	rm -rf $(CONFD_INSTALL_INTERMEDIATE)
+	sed -i ':a;N;$$!ba; s|<operational>.*<\/operational>|<operational><enabled>true<\/enabled><\/operational>|g' $(CONFD_DIR)/etc/confd/confd.conf
+print-%  : ; @echo $* = $($*)
+
+
+
+3) Add openssl/1.0.1u with: module add openssl/1.0.1u
+4) Inside the repo folder, create a directory named 'confd'
+5) set this two variables: 
+export CONFD_DIR=confd 
+export LD_LIBRARY_PATH=/app/vbuild/RHEL8-x86_64/openssl/1.0.1u/lib
+6) inside the repo do:
+make install
+make all
+make start
+ 
+once you do make start, the "server" will start, so you have to open another terminal, set the openssl with module, and the two variables named previously, go to the repo and do: make cli
+Then you will enter into the CLI simulator
+
+make stop                                                                        # /workspace/git/ewolgeb/gebru/user-plane-cm-publisher
+confd/bin/confd --stop
+
+make cli                                                                         # /workspace/git/ewolgeb/gebru/user-plane-cm-publisher
+confd/bin/confd_cli --interactive
+Welcome to ConfD Basic
+The CLI may only be used during product development.
+
+configurationuser-plane  subscriber-fireall
