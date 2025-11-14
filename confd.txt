@@ -1,23 +1,35 @@
 ChatGPT said:
-
 confd is a tool used to manage and deploy configuration files in a consistent and automated way, particularly for systems that require dynamic configuration updates. It's especially useful in environments where configuration data is stored in external sources like etcd, Consul, or other key-value stores.
-
 Here are some key points about confd:
-
 Configuration Management: confd templates configuration files from a source of truth (like etcd, Consul, or others) into the format that your application needs.
-
 Dynamic Configuration: It can dynamically pull configuration values from a key-value store, allowing you to change configurations in real-time without needing to restart services or manually update configuration files.
-
 Template System: It uses Go templates to generate configuration files. These templates can be filled with data from the key-value store.
 
-Polling or Event-Driven: confd can either poll the data store at regular intervals or respond to changes in the key-value store (using an event-driven approach).
+Local testing CLI
+Testing the YANG model changes is a multiple steps process, including the use of EVRTD and Helm deployments in PCG.
+I was using a local Confd installation to launch a CLI and test development changes in the YANG models.
+To launch everything, I have a Makefile (see attachment)
+With this Makefile, you can:
+1- Install ConfD and patch configuration
+2- Compile yang models
+3- Launch the ConfD daemon server
+4- Launch ConfD CLI
+5- Gently stop running Confd daemon.
+Prerequisites
+You need to have OpenSSL 1.0.0. library
+In the E2C uses module load openssl/1.0.0
+Usage
+As it is, this Makefile is thought to be copied into epg/up/upcma folder
+Once you have the makefile, you can issue make commands:all,clean,start,stop,cli,lint,test,install,usage
+If you issue "make usage" you will be prompted with what the others targets do.
 
+Most of the commands relay in a local ConfD installation. You can indicate where you have a ConfD with the variable CONFD_DIR
+Also, you can install using "make install", and it will install a fresh new ConfD in the $CONFD_DIR and patch is configuration file to be able to run.
+make all will compile all the yang files in epg/up/upcma/yang. It does as a traditional make only compiling those files that were not compiled before or have some changes.After compiling, you can "make start" which will launch a ConfD daemon that will load your compiled yangs (fxs files)
+In another terminal, you can issue make CLI to kick a CLI attached to the ConfD daemon.
 
-1) Clone this repo in your workspace: pc/user-plane-cm-publisher · Gerrit Code Review
+1) Clone this repo in your workspace: pc/user-plane-cm-publisher · Gerrit Code Review  which microservice have yangmodel and its orchastration.
 2) inside the repo, copy the following Makefile:
- 
-
-
 # Makefile
 usage:
 	@echo "make all      Build yang files"
